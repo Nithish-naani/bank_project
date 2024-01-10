@@ -1,0 +1,562 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:sockets="http://www.mulesoft.org/schema/mule/sockets" xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/sockets http://www.mulesoft.org/schema/mule/sockets/current/mule-sockets.xsd">
+    <http:listener-config name="new-raml-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8082" />
+    </http:listener-config>
+    <apikit:config name="new-raml-config" api="resource::309ad882-de1e-413b-9f43-45e17d91b204:new-raml:1.0.0:raml:zip:new-raml.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <db:config name="Database_Config" doc:name="Database Config" doc:id="4f758041-b605-45ef-a994-bae89ac539b2" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="nithish" database="nithish" />
+	</db:config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="3576adae-7235-4a4e-9ecd-037562131bf9" >
+		<email:smtp-connection host="smtp.gmail.com" user="nithishnaani1616@gmail.com" password="shdk nhyv vnft lkaz" port="587">
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	<flow name="new-raml-main" doc:id="36be0c13-bf0d-4cb8-affa-3001a9457cb2">
+        <http:listener config-ref="new-raml-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="new-raml-config" />
+    </flow>
+    <flow name="put:\unblock:application\json:new-raml-config">
+        <ee:transform doc:name="Transform Message" doc:id="bf46b495-14a7-41be-b4ec-264644f82ff2" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="inputData" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="b13302c6-1095-4286-a8ce-787e96a8d454" >
+			<when expression="#[vars.inputData.user == 'admin' and vars.inputData.password == 'admin']">
+				<db:select doc:name="Select" doc:id="e86edd7c-bc3d-4311-b9d7-a5b37c6727a3" config-ref="Database_Config">
+					<db:sql ><![CDATA[SELECT * FROM nithish.bank_transactions
+WHERE accountStatus = "Active";]]></db:sql>
+				</db:select>
+				<choice doc:name="Choice" doc:id="67344308-4073-45d9-8a52-a6d7914e5efe" >
+					<when expression="#[sizeOf(payload) == 0]">
+						<ee:transform doc:name="Transform Message" doc:id="d572b89f-302a-4444-9394-806a22cce406" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+
+"Account " ++ vars.inputData.accountNum ++ "is Active"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Transform Message" doc:id="c67e09b5-e5d1-4cf6-a663-caba04395b0c">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="data" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.mailId[0]]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<db:update doc:name="Update" doc:id="99748862-0519-401b-8470-9e44bdda5902" config-ref="Database_Config">
+							<db:sql ><![CDATA[UPDATE nithish.bank_transactions
+SET accountStatus = "Active", wrongPin = 0
+WHERE custAccNum = :custAccNum;
+]]></db:sql>
+							<db:input-parameters ><![CDATA[#[{
+	custAccNum: vars.inputData.accountNum
+}]]]></db:input-parameters>
+						</db:update>
+						<ee:transform doc:name="Transform Message" doc:id="fb83c855-6267-4062-8fcb-69af9b01ecd0" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " is Unblocked"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<email:send doc:name="Send" doc:id="baea89ff-a0ec-4c94-95c9-9074363ce49a" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Account Unblocked!"]'>
+							<email:to-addresses >
+								<email:to-address value="#[vars.data]" />
+							</email:to-addresses>
+							<email:body >
+								<email:content ><![CDATA[#["This is to inform you that Your Account has been unblocked"]]]></email:content>
+							</email:body>
+						</email:send>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="641c7f16-dbf5-4704-906d-e20d234406ac" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " does not exist enter valid details"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+    </flow>
+    <flow name="post:\checkBalance:application\json:new-raml-config">
+        <ee:transform doc:name="Transform Message" doc:id="cbb992fa-148a-4f1e-9f08-0c8909f26df6" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="bank" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.bank]]></ee:set-variable>
+				<ee:set-variable variableName="accountType" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.accType]]></ee:set-variable>
+				<ee:set-variable variableName="inputData" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="b1fa89db-2c42-480a-a7bc-4946618eacde" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM nithish.bank_transactions WHERE 
+custAccNum = :custAccNum AND bankName = :bankName;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	custAccNum: vars.inputData.accountNum,
+	bankName: vars.bank
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="7d3cdfbe-5c41-4811-8818-f4dae20f7cd9" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload ]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="data" ><![CDATA[%dw 2.0
+output application/json
+---
+payload reduce((item, accumulator)-> item)]]></ee:set-variable>
+				<ee:set-variable variableName="balance" ><![CDATA[%dw 2.0
+output application/json
+import * from dw::util::Coercions
+---
+toString(payload[0].totalBalance)]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="1b07c1a2-821c-4695-8958-434d8c69456d" >
+			<when expression="#[sizeOf(payload) &gt; 0]">
+				<choice doc:name="Choice" doc:id="c901019a-63fa-44ed-ae3f-c7e58f035c59" >
+					<when expression='#[vars.data.accountStatus == "Active"]'>
+						<choice doc:name="Choice" doc:id="6bda4f5e-8b72-43ad-8ca1-6ab116e4c12b" >
+							<when expression="#[vars.data.atmPin == vars.inputData.atmPin]">
+								<ee:transform doc:name="Transform Message" doc:id="654623b0-f3e8-4b65-99e7-4c85776b1044" >
+									<ee:message >
+										<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Your total Balance is " ++ vars.balance]]></ee:set-payload>
+									</ee:message>
+								</ee:transform>
+							</when>
+							<otherwise >
+								<choice doc:name="Choice" doc:id="2aa51b60-4155-45c4-90bc-939ac775c686" >
+									<when expression="#[vars.data.wrongPin == 3]">
+										<db:update doc:name="Update" doc:id="565904f1-6858-4eda-9110-e2ccb52cc729" config-ref="Database_Config">
+											<db:sql ><![CDATA[UPDATE nithish.bank_transactions SET accountStatus = "Blocked"
+WHERE custAccNum = :custAccNum;]]></db:sql>
+											<db:input-parameters ><![CDATA[#[{
+	custAccNum: vars.inputData.accountNum
+	
+}]]]></db:input-parameters>
+										</db:update>
+										<ee:transform doc:name="Transform Message" doc:id="eb84bd76-31ab-4540-a874-8527ad9d4dfd" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Maximum attempts reached. Your Account " ++ vars.inputData.accountNum ++ " temporarily Blocked. Please reach nearest Branch"]]></ee:set-payload>
+											</ee:message>
+										</ee:transform>
+										<email:send doc:name="Send" doc:id="4e24b52b-0953-4917-945b-7e7a62eeacb1" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Account Blocked!"]'>
+											<email:to-addresses >
+												<email:to-address value="#[vars.data.mailId]" />
+											</email:to-addresses>
+											<email:body >
+												<email:content ><![CDATA[#["This is to inform you that Your Account has been be blocked
+due to 3 failed attempts. Please reach out nearest branch to unblock "]]]></email:content>
+											</email:body>
+										</email:send>
+									</when>
+									<otherwise>
+										<ee:transform doc:name="Transform Message" doc:id="e6dcae26-af02-4bf7-89d6-18e2125618fb" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+											</ee:message>
+											<ee:variables >
+												<ee:set-variable variableName="number" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.wrongPin[0]]]></ee:set-variable>
+											</ee:variables>
+										</ee:transform>
+										<set-variable value="#[vars.number+1]" doc:name="Set Variable" doc:id="83812bbe-fb64-48f3-957f-99cf6f11bc1f" variableName="value"/>
+										<db:update doc:name="Update" doc:id="d33f17f9-fde6-469c-b270-24c55c11f0de" config-ref="Database_Config">
+											<db:sql ><![CDATA[UPDATE nithish.bank_transactions
+SET wrongPin = :wrongPin
+WHERE custAccNum = :custAccNum;]]></db:sql>
+											<db:input-parameters ><![CDATA[#[{
+	wrongPin: vars.value,
+	custAccNum: vars.inputData.accountNum
+}]]]></db:input-parameters>
+										</db:update>
+										<ee:transform doc:name="Transform Message" doc:id="6fcc5034-aa78-44ae-a71f-91670bac6ba9" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from dw::util::Coercions
+---
+"Login Attempt Failed attempts left: " ++ toString(vars.number)]]></ee:set-payload>
+											</ee:message>
+										</ee:transform>
+										<email:send doc:name="Send" doc:id="396add8e-f9c9-403d-9b83-c1b94eb59608" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Failed Attempt!"]'>
+											<email:to-addresses >
+												<email:to-address value="#[vars.data.mailId]" />
+											</email:to-addresses>
+											<email:body >
+												<email:content ><![CDATA[#["This is to inform you that there’s a failed attempt happened
+while transaction . Your Account will be blocked after 3 attempts 
+"]]]></email:content>
+											</email:body>
+										</email:send>
+									</otherwise>
+								</choice>
+							</otherwise>
+						</choice>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Transform Message" doc:id="c4ac63dc-0d3c-4f74-bde5-45262ce53304" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " temporarily blocked. Please visit nearest branch"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="e6cd3896-cb06-4b72-9787-830661263d78" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " does not exist please enter valid details"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+    </flow>
+    <flow name="post:\createAccount:application\json:new-raml-config">
+        <ee:transform doc:name="Transform Message" doc:id="9c7354f5-0d3f-4008-8e44-3cc39d58de98" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="inputData" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+				<ee:set-variable variableName="customerName" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.customerName]]></ee:set-variable>
+				<ee:set-variable variableName="bank" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.bank]]></ee:set-variable>
+				<ee:set-variable variableName="accountType" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.accountType]]></ee:set-variable>
+				<ee:set-variable variableName="branchName" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.branchName]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="effb14cf-c5d8-47f2-a0f3-e9a3e97da110" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM nithish.bank_transactions WHERE custName = :custName;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	custName: vars.customerName
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="c7c4b19f-da8d-4010-b413-69e97519abbf" >
+			<when expression="#[sizeOf(payload) == 0]">
+				<ee:transform doc:name="Transform Message" doc:id="320e2f42-41d8-4754-ac5d-ece5a28e105c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    atmPin: vars.inputData.atmPin,
+	totalBalance: vars.inputData.depositAmount,
+	accountType: vars.accountType,
+	branchName: vars.branchName,
+	bankName: vars.bank,
+	custAccNum: vars.inputData.accountNum,
+	custName: vars.customerName,
+	phoneNumber: vars.inputData.contact,
+	mailId: vars.inputData.mailId,
+	pk: payload.pk,
+	ifscCode: vars.inputData.ifscCode,
+	transactionTimeStamp: now() as DateTime,
+	accountStatus: "Active",
+	wrongPin: 0
+	
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<db:insert doc:name="Insert" doc:id="77e41733-4449-46e6-b461-138fd00bd2d4" config-ref="Database_Config">
+					<db:sql ><![CDATA[INSERT INTO nithish.bank_transactions (pk, custName, custAccNum, atmPin, bankName, accountType, ifscCode, branchName, totalBalance, transactionTimeStamp, accountStatus, wrongPin, mailId, phoneNumber)
+VALUES(:pk, :custName, :custAccNum, :atmPin, :bankName, :accountType, :ifscCode, :branchName, :totalBalance, :transactionTimeStamp, :accountStatus, :wrongPin, :mailId, :phoneNumber)]]></db:sql>
+					<db:input-parameters ><![CDATA[#[payload]]]></db:input-parameters>
+				</db:insert>
+				<ee:transform doc:name="Transform Message" doc:id="34cff0d8-c8d4-483d-9b75-706348bfde15">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"Account Created Successfully with Account Number" ++ vars.inputData.accountNum]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<email:send doc:name="Send" doc:id="39a75d86-4972-4443-86ce-c3720e87df50" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Congratulations! Account crerated"]'>
+					<email:to-addresses >
+						<email:to-address value="#[vars.inputData.mailId]" />
+					</email:to-addresses>
+				</email:send>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="e05fb740-8c7a-4d54-84ae-98da04aa0718" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " already exist"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+    </flow>
+    <flow name="post:\withDraw:application\json:new-raml-config">
+		<ee:transform doc:name="Transform Message" doc:id="bb5285bf-a58c-4aa1-915f-b63c4ae99336" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="bank" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.bank]]></ee:set-variable>
+				<ee:set-variable variableName="accType" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.accType]]></ee:set-variable>
+				<ee:set-variable variableName="inputData" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="d1a4768b-8a52-4cb0-bc31-73e159c503a0" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM nithish.bank_transactions
+WHERE custAccNum = :custAccNum AND bankName = :bankName;]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	custAccNum: vars.inputData.accountNum,
+	bankName: vars.bank
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="381a054d-10a2-4aa7-a40c-314be7d149c7" >
+			<when expression="#[sizeOf(payload) &gt; 0]">
+				<ee:transform doc:name="Transform Message" doc:id="fbf1b895-edda-4ba2-93df-2b37dbe89585" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="data" ><![CDATA[%dw 2.0
+output application/json
+---
+payload[0]]]></ee:set-variable>
+						<ee:set-variable variableName="pin" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.wrongPin[0]]]></ee:set-variable>
+						<ee:set-variable variableName="balance" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.totalBalance[0]]]></ee:set-variable>
+						<ee:set-variable variableName="mail" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.mailId[0]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<choice doc:name="Choice" doc:id="6a75a002-8888-445d-a469-f4855c62c2fe" >
+					<when expression='#[vars.data.accountStatus == "Active"]'>
+						<choice doc:name="Choice" doc:id="93ec2d7b-7673-4346-bfa9-62feea0017f3" >
+							<when expression="#[vars.data.atmPin == vars.inputData.atmPin]">
+								<choice doc:name="Choice" doc:id="ad0fc3cc-e72f-4b24-ab2f-8ddaca9a5925" >
+									<when expression="#[vars.data.totalBalance &lt; vars.inputData.amountToBeWithdraw]">
+										<ee:transform doc:name="Transform Message" doc:id="0964dfe6-2dd2-4373-a8fe-9c5a296d15b2" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Insufficient Funds"]]></ee:set-payload>
+											</ee:message>
+										</ee:transform>
+									</when>
+									<otherwise >
+										<set-variable value="#[vars.balance - vars.inputData.amountToBeWithdraw]" doc:name="Set Variable" doc:id="734d66b2-1383-48a9-9310-508acbdad3ac" variableName="totalBalance"/>
+										<db:update doc:name="Update" doc:id="8e9600a1-f78c-4b40-9b0e-359f12157f01" config-ref="Database_Config">
+											<db:sql ><![CDATA[UPDATE nithish.bank_transactions
+SET totalBalance = :totalBalance
+WHERE custAccNum = :custAccNum;]]></db:sql>
+											<db:input-parameters ><![CDATA[#[{
+	totalBalance: vars.totalBalance,
+	custAccNum: vars.inputData.accountNum
+}]]]></db:input-parameters>
+										</db:update>
+										<ee:transform doc:name="Transform Message" doc:id="e7427845-d750-401d-96c9-fce89fc9e153" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from dw::util::Coercions
+---
+"Account " ++ vars.inputData.accountNum ++ " debited Your total Balance is " ++ toString(vars.totalBalance)]]></ee:set-payload>
+											</ee:message>
+										</ee:transform>
+										<email:send doc:name="Send" doc:id="307c37ad-ccf6-4df2-811b-590bc1b601b1" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Transaction Alert!"]'>
+											<email:to-addresses >
+												<email:to-address value="#[vars.mail]" />
+											</email:to-addresses>
+										</email:send>
+									</otherwise>
+								</choice>
+							</when>
+							<otherwise >
+								<choice doc:name="Choice" doc:id="e18fd7fd-cf6d-4606-b957-e4213d194d41" >
+									<when expression="#[vars.data.wrongPin == 3]">
+										<db:update doc:name="Update" doc:id="53fc7c90-74a5-42b9-893c-9b6ffad0e575" config-ref="Database_Config">
+											<db:sql ><![CDATA[UPDATE nithish.bank_transactions
+SET accountStatus = "Blocked"
+WHERE custAccNum = :custAccNum;]]></db:sql>
+											<db:input-parameters ><![CDATA[#[{
+	custAccNum: vars.inputData.accountNum
+}]]]></db:input-parameters>
+										</db:update>
+										<ee:transform doc:name="Transform Message" doc:id="7824b892-8804-4ec0-b1cd-d9e69cbaf016" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Maximum attempts reached. Your Account " ++ vars.inputData.accountNum ++ " is temporarily blocked Please reach nearest branch"]]></ee:set-payload>
+											</ee:message>
+										</ee:transform>
+										<email:send doc:name="Send" doc:id="1f1ba94b-f828-482a-8705-85b76dc2bbb4" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Account Blocked!"]'>
+											<email:to-addresses >
+												<email:to-address value="#[vars.mail]" />
+											</email:to-addresses>
+										</email:send>
+									</when>
+									<otherwise >
+										<set-variable value="#[vars.pin+1]" doc:name="Set Variable" doc:id="c264daa0-fc46-42d4-a598-17e20fce155c" variableName="value"/>
+										<db:update doc:name="Update" doc:id="c653661c-37f0-4578-9777-ba961d66b4c6" config-ref="Database_Config">
+											<db:sql ><![CDATA[UPDATE nithish.bank_transactions
+SET wrongPin = :wrongPin
+WHERE custAccNum = :custAccNum;]]></db:sql>
+											<db:input-parameters ><![CDATA[#[{
+	wrongPin: vars.value,
+	custAccNum: vars.inputData.accountNum
+}]]]></db:input-parameters>
+										</db:update>
+										<ee:transform doc:name="Transform Message" doc:id="abfa06da-ee23-4e74-a537-01b189e15010" >
+											<ee:message >
+												<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from dw::util::Coercions
+---
+"Login attempt failed. Attempts left: " ++ toString(vars.value)]]></ee:set-payload>
+											</ee:message>
+										</ee:transform>
+										<email:send doc:name="Send" doc:id="380f1b7d-1b8f-42e7-acb4-79128af74993" config-ref="Email_SMTP" fromAddress="nithishnaani1616@gmail.com" subject='#["Failed Attempt!"]'>
+											<email:to-addresses >
+												<email:to-address value="#[vars.mail]" />
+											</email:to-addresses>
+										</email:send>
+									</otherwise>
+								</choice>
+							</otherwise>
+						</choice>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Transform Message" doc:id="fcf2568c-c0da-445c-ae1f-2c94d8d19088" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " temporarily blocked. Please visit nearest branch"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="cd7867e0-5eb8-4695-bc56-16f907f17a9c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Account " ++ vars.inputData.accountNum ++ " does not exist Enter Valid Details"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+    </flow>
+</mule>
